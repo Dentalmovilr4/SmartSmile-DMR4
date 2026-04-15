@@ -1,55 +1,66 @@
-import cv2
-import numpy as np
-from face_analyzer import FaceAnalyzer
+import os
 from PIL import Image
+from face_analyzer import FaceAnalyzer
 
-def ejecutar_diseno_digital(ruta_foto_paciente, ruta_protesis, salida_resultado):
-    # 1. Inicializar el analista facial
-    analista = FaceAnalyzer()
-    
-    print(f"--- Analizando rostro en: {ruta_foto_paciente} ---")
-    datos = analista.analizar_paciente(ruta_foto_paciente)
-    
-    if isinstance(datos, str):
-        print(datos)
-        return
 
-    print(f"Forma detectada: {datos['forma_rostro']}")
-    print(f"Ángulo de inclinación: {datos['angulo_inclinacion']:.2f}°")
+def cargar_imagen(ruta):
+    if not os.path.exists(ruta):
+        raise FileNotFoundError(f"No se encontró la imagen: {ruta}")
+    return Image.open(ruta).convert("RGBA")
 
-    # 2. Abrir imágenes con PIL para manejo de transparencia (Alpha Channel)
-    paciente_img = Image.open(ruta_foto_paciente).convert("RGBA")
-    protesis_img = Image.open(ruta_protesis).convert("RGBA")
 
-    # 3. Escalar la prótesis al ancho de la boca (con margen estético)
+def procesar_protesis(protesis_img, datos):
     ancho_boca = datos['ancho_boca']
+
     factor_escala = (ancho_boca * 0.95) / float(protesis_img.size[0])
-    nuevo_ancho = int(protesis_img.size[0] * factor_escala)
-    nuevo_alto = int(protesis_img.size[1] * factor_escala)
-    
-    protesis_res = protesis_img.resize((nuevo_ancho, nuevo_alto), Image.Resampling.LANCZOS)
+    nuevo_size = (
+        int(protesis_img.size[0] * factor_escala),
+        int(protesis_img.size[1] * factor_escala)
+    )
 
-    # 4. Rotar la prótesis para que coincida con el plano oclusal
-    # Usamos -angulo porque PIL rota en sentido antihorario
-    protesis_rot = protesis_res.rotate(-datos['angulo_inclinacion'], expand=True, resample=Image.Resampling.BICUBIC)
+    protesis = protesis_img.resize(nuevo_size, Image.Resampling.LANCZOS)
 
-    # 5. Calcular posición de pegado (centrado en la boca)
-    centro_x = int(datos['centro_boca'][0] - (protesis_rot.size[0] / 2))
-    centro_y = int(datos['centro_boca'][1] - (protesis_rot.size[1] / 2))
+    protesis = protesis.rotate(
+        -datos['angulo_inclinacion'],
+        expand=True,
+        resample=Image.Resampling.BICUBIC
+    )
 
-    # 6. Superposición final
-    paciente_img.paste(protesis_rot, (centro_x, centro_y), protesis_rot)
+    return protesis
 
-    # Guardar resultado
-    resultado_final = paciente_img.convert("RGB")
-    resultado_final.save(salida_resultado)
-    print(f"✅ ¡Éxito! Diseño guardado en: {salida_resultado}")
 
-# --- BLOQUE DE EJECUCIÓN ---
+def calcular_posicion(protesis, datos):
+    x = int(datos['centro_boca'][0] - protesis.size[0] / 2)
+    y = int(datos['centro_boca'][1] - protesis.size[1] / 2)
+    return x, y
+
+
+def ejecutar_diseno_digital(ruta_foto, ruta_protesis, salida):
+    analista = FaceAnalyzer()
+
+    print(f"Analizando: {ruta_foto}")
+    datos = analista.analizar_paciente(ruta_foto)
+
+    if not isinstance(datos, dict):
+        raise ValueError(datos)
+
+    paciente = cargar_imagen(ruta_foto)
+    protesis = cargar_imagen(ruta_protesis)
+
+    protesis = procesar_protesis(protesis, datos)
+    posicion = calcular_posicion(protesis, datos)
+
+    paciente.paste(protesis, posicion, protesis)
+
+    resultado = paciente.convert("RGB")
+    resultado.save(salida)
+
+    print(f"✅ Resultado guardado en: {salida}")
+
+
 if __name__ == "__main__":
-    # Ajusta estas rutas a tus archivos reales
-    FOTO_INPUT = "paciente.jpg.jpeg" 
-    DIENTES_INPUT = "assets/overlays/protesis_estandar.png"
-    OUTPUT = "resultado_diseno.jpg"
-    
-    ejecutar_diseno_digital(FOTO_INPUT, DIENTES_INPUT, OUTPUT)
+    ejecutar_diseno_digital(
+        "paciente.jpg.jpeg",
+        "assets/overlays/protesis_estandar.png",
+        "resultado_diseno.jpg"
+    )

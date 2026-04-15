@@ -48,7 +48,7 @@ def ejecutar_diseno_digital(ruta_foto_paciente, ruta_protesis, salida_resultado)
 # --- BLOQUE DE EJECUCIÓN ---
 if __name__ == "__main__":
     # Ajusta estas rutas a tus archivos reales
-    FOTO_INPUT = "paciente.jpg" 
+    FOTO_INPUT = "assets/overlays/20260415_100506.jpg" 
     DIENTES_INPUT = "assets/overlays/protesis_estandar.png"
     OUTPUT = "resultado_diseno.jpg"
     
